@@ -1,6 +1,7 @@
 from ctypes.wintypes import BOOLEAN     # Not sure who included this ...
 
-import tkinter as tk                                            # Used for the GUI
+import tkinter as tk
+from tkinter.constants import N                                            # Used for the GUI
 from tkinter.filedialog import askopenfilename                  # Used for the GUI
 from tkinter import messagebox                                  # Used for the GUI
 
@@ -24,6 +25,7 @@ from logging import StreamHandler, Formatter        # Used in logging
 
 #region ~~~~~~~~~~  Global variables  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Looking for a better way to do this ...
+smallfont = ('Helvetica','8','normal')
 normalfont = ('Helvetica','10','normal')
 boldfont = ('Helvetica','10','bold')
 EOL = '\r'      # Constant end of line character.  This must match with Arduino starter code.
@@ -49,7 +51,7 @@ logging.basicConfig(
     handlers=[stdout, stderr, debug_output],
 )
 
-# Comment out the below to enable debug output
+#Comment out the below to enable debug output
 #logging.disable(logging.DEBUG)
 
 #endregion
@@ -77,7 +79,7 @@ class tkinterGUI(tk.Tk):
         self.arduino_list = []      # A list of possible arduinos (used only in tkinterGUI class)
         self.timer_id = ''          # Not needed here, just a reminder this is a local variable 
 
-        self.protocol("WM_DELETE_WINDOW", self.quit_program())     # Needed to provide a good exit stratagy
+        self.protocol("WM_DELETE_WINDOW", self.quit_program)    # Needed to provide a good exit stratagy
 
         # ================== Add a menu ======================================================================
         self.my_menu = tk.Menu(self)
@@ -85,15 +87,15 @@ class tkinterGUI(tk.Tk):
         # Create menu items ---------------------------------------------------------------------
         self.file_menu = tk.Menu(self.my_menu,tearoff=False)
         self.my_menu.add_cascade(label="File", menu=self.file_menu)
-        self.file_menu.add_command(label="Save As...", command=self.func_opendialog())
+        self.file_menu.add_command(label="Save As...", command=self.func_opendialog)
         self.file_menu.add_separator()
-        self.file_menu.add_command(label="Exit", command=self.quit_program())
+        self.file_menu.add_command(label="Exit", command=self.quit_program)
         # Create a help menu ---------------------------------------------------------------------
         self.help_menu = tk.Menu(self.my_menu,tearoff=False)
         self.my_menu.add_cascade(label="Help", menu=self.help_menu)
-        self.help_menu.add_command(label="Browser", command=self.func_openbrowser())
+        self.help_menu.add_command(label="Browser", command=self.func_openbrowser)
         self.help_menu.add_separator()
-        self.help_menu.add_command(label="About", command=self.func_aboutscreen())
+        self.help_menu.add_command(label="About", command=self.func_aboutscreen)
 
         # NOTE: about the grid control method of laying out the controls......
         #    I think it is a quick way to layout the controls, but it spaces them uniformly across the width of the frame.
@@ -179,7 +181,7 @@ class tkinterGUI(tk.Tk):
         about.resizable(width=tk.FALSE, height=tk.FALSE)
         about.attributes("-toolwindow",1)
         about.focus_set()
-        txt_name_about = tk.Text(about, height=20, width=70)
+        txt_name_about = tk.Text(about, height=20, width=70, font=smallfont)
         aboutstuff = f"""
         Program name: Starter Application
         Author: Bugs Bunny
@@ -209,7 +211,6 @@ class tkinterGUI(tk.Tk):
                 ("png files","*.png")
             )
         )
-        self.filename=""
         self.txt_name_multi.insert(tk.END, f"{self.filename}\n")
         self.txt_name_multi.yview(tk.END)
 
@@ -220,15 +221,16 @@ class tkinterGUI(tk.Tk):
 
     # execute this code when you click the button.  It calls the matplotlib graph function
     def func_btn_submit(self):
-        message = self.send_command(self.txt_command_str.get())
+        message = self.send_command(self.txt_command_str.get().strip())
         self.txt_name_multi.insert(tk.END, f"{message}\n")
         self.txt_name_multi.yview(tk.END)
+        SendEmailMessage()
 
     # display the select value from the drop down list box
     def func_opt_serial(self,event):
-        self.cancel_timer()      # Just in case one is running (i.e. you switch Ardunios mid-stream...)
-        self.reset_arduinos()    # Just in case, stop all Arduinos from outputting analog data stream
-        comport_key = self.get_com_port()
+        #self.cancel_timer()      # Just in case one is running (i.e. you switch Ardunios mid-stream...)
+        #self.reset_arduinos()    # Just in case, stop all Arduinos from outputting analog data stream
+        comport_key = self.get_com_port().strip()
 
         self.txt_name_multi.insert(tk.END,f"key={comport_key} \n")
         self.txt_name_multi.yview(tk.END)
@@ -247,29 +249,31 @@ class tkinterGUI(tk.Tk):
 
     # Set the analog read mode
     def func_chk_analogread(self):
-        set_analogread(self.arduino_port, bool(self.chk_analogread_str.get()))
+        if self.arduino_port.is_open:
+            set_analogread(bool(self.chk_analogread_str.get()))
+        else:
+            self.chk_analogread.deselect()
 
     # Set the flicker mode
     def func_chk_flicker(self):
-        set_flicker(self.arduino_port, bool(self.chk_flicker_str.get()))
+        if self.arduino_port.is_open:
+            set_flicker(bool(self.chk_flicker_str.get()))
+        else:
+            self.chk_flicker.deselect()
 
     # Show which radio button was selected
     def func_rdo_notify(self):
-        selection = f"You selected the option {self.rdo_name_str.get()}\n"
+        selection = f"You selected the option {self.rdo_notify_str.get()}\n"
         self.txt_name_multi.insert(tk.END,selection)
         self.txt_name_multi.yview(tk.END)
-
-    # dummy command
-    def dummy_command(self):
-        pass
 
     # Routine to handle closing of the program window via the drop-down menu
     def quit_program(self):
         self.cancel_timer()      # Just in case one is running (i.e. you switch Ardunios mid-stream...)
         self.reset_arduinos()
-        self.close_ports()
+        #self.close_ports()
         if messagebox.askokcancel("Quit the program", "Are you sure you want to quit?"):
-            self.destroy()
+             self.destroy()
 
     # https://stackoverflow.com/questions/12090503/listing-available-com-ports-with-python
     def scan_serial_ports(self):
@@ -281,7 +285,7 @@ class tkinterGUI(tk.Tk):
         """
         self.arduino_list.append("Select Arduino to use")        # This adds a default entry to the list
         if sys.platform.startswith('win'):
-            ports = [f"COM{i}" for i in range(1,100)]
+            ports = [f"COM{i}" for i in range(1,30)]
         elif sys.platform.startswith('linux') or sys.platform.startswith('cygwin'):
             # this excludes your current terminal "/dev/tty"
             ports = glob.glob('/dev/tty[A-Za-z]*')
@@ -318,25 +322,25 @@ class tkinterGUI(tk.Tk):
                     manuf, model, sernum, firmware = [_.strip() for _ in device_info]
                     device_entry = f"{port}  ({', '.join((manuf, model, sernum, firmware))})"
                     self.arduino_list.append(device_entry)
-                self.__open_ports__[port] = ser
+                    self.__open_ports__[port] = ser
             except (OSError, serial.SerialException):
                 pass
         if len(self.arduino_list) == 1:
             self.arduino_list[0] = "No Arduino devices found"
 
     def get_com_port(self):
-        data = self.opt_serial_str.get()
-        if "COM" in data:
-            return data[:5]
-        else:
-            return ""
+         data = self.opt_serial_str.get()
+         if "COM" in data:
+             return data[:5]
+         else:
+             return ""
 
     def cancel_timer(self):
-        # If the Timer is running, stop it.
-        try:
-            self.after_cancel(self.timer_id)        
-        except:
-            pass
+         # If the Timer is running, stop it.
+         try:
+             self.after_cancel(self.timer_id)        
+         except:
+             pass
 
     # Send the command and output the result
     def send_command(self, command:str)->str:
@@ -346,21 +350,38 @@ class tkinterGUI(tk.Tk):
                 self.arduino_port.write(f"{command}{EOL}".encode())
                 buffer = ''
                 buffer = self.arduino_port.read_until(expected=b'\r')
-                message = buffer.decode().strip
+                message = buffer.decode().strip()
             except:
                 message = 'Send command failed'
         else:
             message = 'Arduino port not open'
         return message
         
+    def get_data(self)->str:
+        try:
+            buffer = ''
+            buffer = self.arduino_port.read_until(expected=b'\r')
+            message = buffer.decode().strip()
+        except:
+            message = 'Receive failed'
+        return message
+
     def reset_arduinos(self):
-        for key, port in self.__open_ports__.items():
-            self.arduino_port = port
-            message = self.send_command('ae')
+        try:
+            for key, port in self.__open_ports__.items():
+                self.arduino_port = port
+                message = self.send_command('ae')
+                message = self.send_command('lo')
+        except:
+            pass
 
     def close_ports(self):
-        for key, port in self.__open_ports__.items():
-            port.close()
+        try:
+            for key, port in self.__open_ports__.items():
+                if port.is_open:
+                    port.close()
+        except:
+            pass
 
     def power_status(self):
         # returns a tuple 
@@ -374,58 +395,42 @@ class tkinterGUI(tk.Tk):
 
 #region ~~~~~~~~~~  Miscellaneous functions  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Set the Arduino to flicker LED
-def set_flicker(arduino_port:serial.Serial, FlickerOn:bool = True):
-    if arduino_port.is_open:
-        try:
-            if FlickerOn:
-                message = my_gui.send_command('lf')
-            else:
-                message = my_gui.send_command('lo', arduino_port)
-        except:
-            pass
+def set_flicker(FlickerOn:bool):
+    if FlickerOn:
+        message = my_gui.send_command('lf')
     else:
-        my_gui.chk_flicker.deselect()
+        message = my_gui.send_command('lo')
 
 # Set the Arduino to read data every 1 second
-def set_analogread(arduino_port:serial.Serial, Enable:bool = True):
-    if arduino_port.is_open:
-        try:
-            if Enable:
-                message = my_gui.send_command('ab', arduino_port)
-                # https://www.pythontutorial.net/tkinter/tkinter-after/
-                my_gui.timer_id = my_gui.after(800,analogread_timer(arduino_port))
-            else:
-                my_gui.cancel_timer()
-                # Stop the Arduino from outputting data regularly
-                message = my_gui.send_command('ae', arduino_port)
-        except:
-            pass
+def set_analogread(StartRead:bool):
+    if StartRead:
+        message = my_gui.send_command('ab')
+        # https://www.pythontutorial.net/tkinter/tkinter-after/
+        my_gui.timer_id = my_gui.after(800,analogread_timer)
     else:
-        my_gui.chk_AnalogInCycle.deselect()
+        my_gui.cancel_timer()
+        # Stop the Arduino from outputting data regularly
+        message = my_gui.send_command('ae')
 
 # +++++++++++++++++++++ Read analog data (and re-intialze Timer afterwards) ++++++++++++++++++++++++++++
-def analogread_timer(arduino_port):
-    if arduino_port.is_open:     
-        buffer = arduino_port.read_until(expected=b'\r')
-        my_gui.txt_name_multi.insert(tk.END,buffer.decode() + " (" + str(my_gui.timer_id) + ")")
-        my_gui.txt_name_multi.yview(tk.END) 
-        my_gui.timer_id = my_gui.after(800,analogread_timer(arduino_port))
-    else:
-        my_gui.txt_name_multi.insert(tk.END,"Serial Port closed\r\n")
-        my_gui.txt_name_multi.yview(tk.END)
+def analogread_timer():   
+    analog_data = my_gui.get_data()
+    my_gui.txt_name_multi.insert(tk.END,f"{analog_data}  ({str(my_gui.timer_id)})\n")
+    my_gui.txt_name_multi.yview(tk.END) 
+    my_gui.timer_id = my_gui.after(800,analogread_timer)
 
 def SendEmailMessage():
     config = configparser.ConfigParser(strict=True)
-    config.read(list(Path.cwd().glob("*.ini")))
+    config.read(Path("starter.ini"))
 
-    smtp_server = config["SMTP Server"]["SMTPServer"]
-    port = config.getint("SMTP Server","SMTPPort")
-    sender_email = config["SMTP Credentials"]["SenderEmail"]
-    password = config["SMTP Credentials"]["Password"]
-    receiver_email = config["Message Settings"]["NotifyEmail"]
+    smtp_server = config["SMTPinfo"]["SMTPServer"]
+    port = config.getint("SMTPinfo","SMTPPort")
+    sender_email = config["SMTPinfo"]["SenderEmail"]
+    password = config["SMTPinfo"]["Password"]
+    receiver_email = config["SMTPinfo"]["NotifyEmail"]
 
     if not all([smtp_server, port, sender_email, password, receiver_email]):
-        return
+         return
 
     message = MIMEMultipart("alternative")
     message["Subject"] = "Test message"
@@ -475,6 +480,6 @@ if __name__ == "__main__":
     # https://stackoverflow.com/questions/29158220/tkinter-understanding-mainloop
     my_gui.mainloop()
 
-    logging.shutdown()
+    # logging.shutdown()
 
 #endregion
