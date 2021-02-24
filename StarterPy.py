@@ -391,25 +391,25 @@ def set_analogread(arduino_port:serial.Serial, Enable:bool = True):
     if arduino_port.is_open:
         try:
             if Enable:
-                message = send_command('ab', arduino_port)
+                message = my_gui.send_command('ab', arduino_port)
                 # https://www.pythontutorial.net/tkinter/tkinter-after/
-                my_gui.timer_id = my_gui.after(800,analogread_timer)
+                my_gui.timer_id = my_gui.after(800,analogread_timer(arduino_port))
             else:
                 my_gui.cancel_timer()
                 # Stop the Arduino from outputting data regularly
-                message = send_command('ae', arduino_port)
+                message = my_gui.send_command('ae', arduino_port)
         except:
             pass
     else:
         my_gui.chk_AnalogInCycle.deselect()
 
 # +++++++++++++++++++++ Read analog data (and re-intialze Timer afterwards) ++++++++++++++++++++++++++++
-def analogread_timer():
-    if ArduinoPort.is_open:     
-        buffer = ArduinoPort.read_until(expected=b'\r')
+def analogread_timer(arduino_port):
+    if arduino_port.is_open:     
+        buffer = arduino_port.read_until(expected=b'\r')
         my_gui.txt_name_multi.insert(tk.END,buffer.decode() + " (" + str(my_gui.timer_id) + ")")
         my_gui.txt_name_multi.yview(tk.END) 
-        TimerAfterID = my_gui.after(800,Timer1)
+        my_gui.timer_id = my_gui.after(800,analogread_timer(arduino_port))
     else:
         my_gui.txt_name_multi.insert(tk.END,"Serial Port closed\r\n")
         my_gui.txt_name_multi.yview(tk.END)
@@ -476,4 +476,5 @@ if __name__ == "__main__":
     my_gui.mainloop()
 
     logging.shutdown()
+
 #endregion
