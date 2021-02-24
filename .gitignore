@@ -1,0 +1,7 @@
+#  Ignore all contents of the _Archive directory
+_Archive/**
+#  Ignore the stuff assocaited with pyinstaller
+__pycache__/**
+build/**
+dist/**
+*.spec

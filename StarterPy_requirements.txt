@@ -1,0 +1,20 @@
+# First, create a python environment from the conda base (we will call it "starter"):
+# 	(base) C:\>conda create -n starter python=3
+# 	(base) C:\>conda activate starter
+#
+# Next, move into the StarterPy directory
+# 	(starter) C:\>cd C:\StarterProject\StarterPy
+#
+# Finally, install the necessary packages (Which are included in this file)
+# 	(starter) C:\StarterProject\StarterPy>conda install --file StarterPy_requirements.txt
+
+pyserial
+psutil
+pyinstaller
+
+#
+# Finally, to create a stand alone .exe file, run the following:
+# (starter) C:\StarterProject\StarterPy>pyinstaller --onefile --windowed --icon .\images\StarterPy.ico --clean --noconfirm .\StarterPy.py
+#          <<<< OR >>>>
+# (starter) C:\StarterProject\StarterPy>pyinstaller -F -w -i .\images\StarterPy.ico --clean -y .\StarterPy.py
+
