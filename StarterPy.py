@@ -1,57 +1,80 @@
-from ctypes.wintypes import BOOLEAN     # Not sure who included this ...
+import sys
+import glob
+from datetime import timedelta
 
-import tkinter as tk
-from tkinter.constants import N                                            # Used for the GUI
+
+import tkinter as tk                                            # Used for the GUI
+from tkinter.constants import N                                 # Used for the GUI
 from tkinter.filedialog import askopenfilename                  # Used for the GUI
 from tkinter import messagebox                                  # Used for the GUI
 
-import serial       # Used to communication to the Arduino (or other serial devices)
-import time         # Used to pause operation for a few seconds (during serial device bootup)
-import sys          # Used in finding available ports
-import glob         # Used in finding available ports
+import serial           # Used to communication to the Arduino (or other serial devices)
+import time             # Used to pause operation for a few seconds (during serial device bootup)
 
 import psutil                       # Used to determine power status in laptops 
-from datetime import timedelta      # Used to format time variables
 import webbrowser as wb             # Used to spawn a browser
-import configparser                                 # Used in parsing
 
 import smtplib, ssl                                 # Used for email notification
 from email.mime.text import MIMEText                # Used for email notification
 from email.mime.multipart import MIMEMultipart      # Used for email notification
+import configparser                                 # Used in parsing .ini file
 
 from pathlib import Path                            # Used for specifying a generic path
 import logging                                      # Used in logging
-from logging import StreamHandler, Formatter        # Used in logging        
+from logging import (                                # Used in logging
+    FileHandler,
+    Formatter,
+    StreamHandler
+)       
 
 #region ~~~~~~~~~~  Global variables  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Looking for a better way to do this ...
-smallfont = ('Helvetica','8','normal')
+smallfont = ('Helvetica','9','normal')
 normalfont = ('Helvetica','10','normal')
 boldfont = ('Helvetica','10','bold')
+analogread_notification_sent = False         # This is used to determine if the email notification was sent for analog read
+pushbutton_notification_sent = False         # This is used to determine if the email notification was sent pushbutton state
 EOL = '\r'      # Constant end of line character.  This must match with Arduino starter code.
 #endregion
 
 #region ~~~~~~~~~~  Code to including error report via logging ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-stdout = StreamHandler(sys.stdout)
-stdout.addFilter(lambda r: logging.INFO <= r.levelno < logging.WARNING)
-stdout.setFormatter(Formatter())  # Don't take the default format we set later
+# Notes: 
+#   CRITICAL (numeric value 50)     stderr
+#   ERROR (numeric value 40)        stderr
+#   WARNING (numeric value 30)      stderr
+#   INFO (numeric value 20)         stdout
+#   DEBUG (numeric value 10)        debug_output
+#   NOTSET (numeric value 0)        debug_output
+#
+# Setup handlers for both displaying log records and writing them to file
 
+# stderr will be called for WARNING level and above
 stderr = StreamHandler(sys.stderr)
 stderr.addFilter(lambda r: r.levelno >= logging.WARNING)
-stderr.setFormatter(Formatter())  # Don't take the default format we set later
+stderr.setFormatter(Formatter())
+# NOTE:  you can call this by    logging.warning("This is a warning")
 
+# stdout will be called for INFO level to just below WARNING
+stdout = StreamHandler(sys.stdout)
+stdout.addFilter(lambda r: logging.INFO <= r.levelno < logging.WARNING)
+stdout.setFormatter(Formatter())
+# NOTE:  you can call this by    logging.info("This is some information")
+
+# Here, stdout will be called for DEBUG level to just below INFO
+#  ONLY, if the logging.disable(logging.DEBUG) statement below IS commented out!
 debug_output = StreamHandler(sys.stdout)
-debug_output.addFilter(lambda r: logging.debug <= r.levelno < logging.INFO)
+debug_output.addFilter(lambda r: logging.DEBUG <= r.levelno < logging.INFO)
+# NOTE:  you can call this by (only when enabled)    logging.debug("This is some debug information")
 
 # Configure logging
 logging.basicConfig(
     format="%(asctime)s -- %(name)s/ -- %(levelname)s :: %(message)s",
     datefmt="%c",
     level=logging.DEBUG,  # if debugging level disabled above, effectively sets level to logging.INFO
-    handlers=[stdout, stderr, debug_output],
+    handlers=[stderr,stdout, debug_output]
 )
 
-#Comment out the below to enable debug output
+#Comment out the below to ENABLE debug output  (uncomment to DISABLE)
 #logging.disable(logging.DEBUG)
 
 #endregion
@@ -131,47 +154,42 @@ class tkinterGUI(tk.Tk):
         self.chk_analogread_str = tk.IntVar()
         self.chk_analogread = tk.Checkbutton(self, text="Analog read mode", variable=self.chk_analogread_str, onvalue=1, offvalue=0,command=self.func_chk_analogread,font=normalfont)
         self.chk_analogread.config(width=17)       
-        self.chk_analogread_str.set(1)
-        self.chk_analogread.grid(row=1, column=1, sticky=tk.NW)
         self.chk_analogread.deselect()
+        self.chk_analogread.grid(row=1, column=1, sticky=tk.NW)
         self.chk_analogread["state"] = "disable"
         # ======================= add check box to enable flickering LED
         self.chk_flicker_str = tk.IntVar()
         self.chk_flicker = tk.Checkbutton(self, text="LED flicker mode", variable=self.chk_flicker_str, onvalue=1, offvalue=0,command=self.func_chk_flicker,font=normalfont)
         self.chk_flicker.config(width=17) 
-        self.chk_flicker_str.set(1)
-        self.chk_flicker.grid(row=1, column=2, sticky=tk.NW)
         self.chk_flicker.deselect()
+        self.chk_flicker.grid(row=1, column=2, sticky=tk.NW)
         self.chk_flicker["state"] = "disable"
 
         # Row = 2 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         # ======================= add notify radio button and filename label
         self.rdo_notify_str = tk.IntVar()
         self.rdo_notify1 = tk.Radiobutton(self, text="No notification",font=normalfont, variable=self.rdo_notify_str, value=1, command=self.func_rdo_notify)
-        self.rdo_notify1.config(width=20)
-        self.rdo_notify1.grid(row=2, column=0, padx=10, sticky=tk.NW)
+        self.rdo_notify1.grid(row=2, column=0, padx=20, sticky=tk.NW)
          # Row = 3 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-        self.rdo_notify2 = tk.Radiobutton(self, text="Notify on Submit",font=normalfont, variable=self.rdo_notify_str, value=2, command=self.func_rdo_notify)
-        self.rdo_notify2.config(width=20)        
-        self.rdo_notify2.grid(row=3, column=0, padx=10, sticky=tk.NW)
+        self.rdo_notify2 = tk.Radiobutton(self, text="Notify on Pushbutton",font=normalfont, variable=self.rdo_notify_str, value=2, command=self.func_rdo_notify)     
+        self.rdo_notify2.grid(row=3, column=0, padx=20, sticky=tk.NW)
         # Row = 4 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-        self.rdo_notify3 = tk.Radiobutton(self, text="Notify on Threshold",font=normalfont, variable=self.rdo_notify_str, value=3,  command=self.func_rdo_notify)
-        self.rdo_notify3.config(width=20)       
-        self.rdo_notify3.grid(row=4, column=0, padx=10, sticky=tk.NW)
+        self.rdo_notify3 = tk.Radiobutton(self, text="Notify on Threshold",font=normalfont, variable=self.rdo_notify_str, value=3,  command=self.func_rdo_notify)     
+        self.rdo_notify3.grid(row=4, column=0, padx=20, sticky=tk.NW)
         self.rdo_notify_str.set('1')        # Set the default radio button to be the first one
         # Row = 5 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         quote = "Hello, let's get started\n"
         # Add a multi-line text box with vertical scroll bar
-        self.frm_name = tk.Frame(self, height=20, width=20)
-        self.frm_name.grid(row=5, rowspan=5, column=0, columnspan=4, padx=10, pady=5, sticky=tk.NW)
-        self.txt_name_multi = tk.Text(self.frm_name, height=25, width=109,font=normalfont)
-        self.txt_name_multi.pack(expand=tk.YES, side=tk.LEFT, fill=tk.Y)
-        self.txt_name_multi.yview(tk.END)
-        self.sb_name = tk.Scrollbar(self.frm_name, command=self.txt_name_multi.yview, orient=tk.VERTICAL)
-        self.txt_name_multi.configure(yscrollcommand=self.sb_name.set)
-        self.sb_name.pack(side=tk.RIGHT, fill=tk.Y)
-        self.txt_name_multi.insert(tk.END,quote)
-        self.txt_name_multi.yview(tk.END)
+        self.frm_output = tk.Frame(self, height=20, width=20)
+        self.frm_output.grid(row=5, rowspan=5, column=0, columnspan=4, padx=10, pady=5, sticky=tk.NW)
+        self.txt_output_multi = tk.Text(self.frm_output, height=25, width=109,font=normalfont)
+        self.txt_output_multi.pack(expand=tk.YES, side=tk.LEFT, fill=tk.Y)
+        self.txt_output_multi.yview(tk.END)
+        self.sb_updown = tk.Scrollbar(self.frm_output, command=self.txt_output_multi.yview, orient=tk.VERTICAL)
+        self.txt_output_multi.configure(yscrollcommand=self.sb_updown.set)
+        self.sb_updown.pack(side=tk.RIGHT, fill=tk.Y)
+        self.txt_output_multi.insert(tk.END,quote)
+        self.txt_output_multi.yview(tk.END)
 
     # Opens an About screen
     def func_aboutscreen(self):
@@ -181,38 +199,36 @@ class tkinterGUI(tk.Tk):
         about.resizable(width=tk.FALSE, height=tk.FALSE)
         about.attributes("-toolwindow",1)
         about.focus_set()
-        txt_name_about = tk.Text(about, height=20, width=70, font=smallfont)
+        txt_about = tk.Text(about, height=20, width=70, font=smallfont)
         aboutstuff = f"""
         Program name: Starter Application
         Author: Bugs Bunny
         Revision: 0.01
-        Date: 2/23/2021
+        Date: 2/24/2021
         
         NOTE: This software is for fun purposes only
         """.strip()
-        txt_name_about.insert(tk.END,aboutstuff)
-        txt_name_about.pack(side=tk.LEFT, fill=tk.Y)
+        txt_about.insert(tk.END,aboutstuff)
+        txt_about.pack(side=tk.LEFT, fill=tk.Y)
 
     # Opens a new browser window (This can also open a local .html file, e.g. documentation)
     @staticmethod
-    def func_openbrowser(url="https://www.google.com"):
+    def func_openbrowser(url="https://nccde.org/1389/Route-9-Library-Innovation-Center"):
         wb.open(url)
 
     # Open up a dialog box and get a filename
     # Note, to get to the filename outside of class: my_gui.filename
     def func_opendialog(self):
         self.filename = askopenfilename(
-            initialdir=(Path(getattr("filename", self)).parent if getattr("filename",self) else Path.home()), 
+            initialdir=(Path(getattr(self,"filename",None)).parent if getattr(self,"filename",None) else Path.home()), 
             title="Select a file", 
             filetypes=(
                 ("all files", "*.*"),
                 ("text files","*.txt"),
-                ("s-parameter files", "*.s2p"),
-                ("png files","*.png")
+                ("csv files","*.csv")
             )
         )
-        self.txt_name_multi.insert(tk.END, f"{self.filename}\n")
-        self.txt_name_multi.yview(tk.END)
+        self.output_text(f"filename to save data: {self.filename}")
 
     # Show the contents of the text box
     # Note, to get to the text box contents outside of class: my_gui.txt_command_str.get()
@@ -222,18 +238,15 @@ class tkinterGUI(tk.Tk):
     # execute this code when you click the button.  It calls the matplotlib graph function
     def func_btn_submit(self):
         message = self.send_command(self.txt_command_str.get().strip())
-        self.txt_name_multi.insert(tk.END, f"{message}\n")
-        self.txt_name_multi.yview(tk.END)
-        SendEmailMessage()
+        self.output_text(f"command: {self.txt_command_str.get().strip()}, output: {message}")
 
     # display the select value from the drop down list box
     def func_opt_serial(self,event):
-        #self.cancel_timer()      # Just in case one is running (i.e. you switch Ardunios mid-stream...)
-        #self.reset_arduinos()    # Just in case, stop all Arduinos from outputting analog data stream
+        self.cancel_timer()      # Just in case one is running (i.e. you switch Ardunios mid-stream...)
+        self.reset_arduinos()    # Just in case, stop all Arduinos from outputting analog data stream
         comport_key = self.get_com_port().strip()
 
-        self.txt_name_multi.insert(tk.END,f"key={comport_key} \n")
-        self.txt_name_multi.yview(tk.END)
+        logging.debug(f"key={comport_key}")
 
         if comport_key in self.__open_ports__.keys():
             self.arduino_port = self.__open_ports__[comport_key]      # THIS IS THE MOST IMPORTANT STEP!!
@@ -263,19 +276,23 @@ class tkinterGUI(tk.Tk):
 
     # Show which radio button was selected
     def func_rdo_notify(self):
-        selection = f"You selected the option {self.rdo_notify_str.get()}\n"
-        self.txt_name_multi.insert(tk.END,selection)
-        self.txt_name_multi.yview(tk.END)
+        if self.rdo_notify_str.get() == 1:
+            self.output_text(f"No notification selected")
+        elif self.rdo_notify_str.get() == 2:
+            self.output_text(f"Notifcation on pushbutton state on Arduino")
+        elif self.rdo_notify_str.get() == 3:
+            self.output_text(f"Notifcation on Analog read > 900 (reset < 100) value on Arduino")
+        else:
+            self.output_text(f"Error in radio button selection")
 
     # Routine to handle closing of the program window via the drop-down menu
     def quit_program(self):
         self.cancel_timer()      # Just in case one is running (i.e. you switch Ardunios mid-stream...)
         self.reset_arduinos()
-        #self.close_ports()
+        # self.close_ports()     # You can include this if you want to close the ports when you exit
         if messagebox.askokcancel("Quit the program", "Are you sure you want to quit?"):
              self.destroy()
 
-    # https://stackoverflow.com/questions/12090503/listing-available-com-ports-with-python
     def scan_serial_ports(self):
         """ Lists serial port names
             :raises EnvironmentError:
@@ -284,6 +301,7 @@ class tkinterGUI(tk.Tk):
                 A list of the serial ports available on the system
         """
         self.arduino_list.append("Select Arduino to use")        # This adds a default entry to the list
+        # https://stackoverflow.com/questions/12090503/listing-available-com-ports-with-python
         if sys.platform.startswith('win'):
             ports = [f"COM{i}" for i in range(1,30)]
         elif sys.platform.startswith('linux') or sys.platform.startswith('cygwin'):
@@ -331,7 +349,7 @@ class tkinterGUI(tk.Tk):
     def get_com_port(self):
          data = self.opt_serial_str.get()
          if "COM" in data:
-             return data[:5]
+             return data[:5].strip()
          else:
              return ""
 
@@ -340,7 +358,7 @@ class tkinterGUI(tk.Tk):
          try:
              self.after_cancel(self.timer_id)        
          except:
-             pass
+             logging.debug(f"Cancel {self.timer_id} failed")
 
     # Send the command and output the result
     def send_command(self, command:str)->str:
@@ -356,33 +374,39 @@ class tkinterGUI(tk.Tk):
         else:
             message = 'Arduino port not open'
         return message
-        
+
+    # This is only used when retrieving continuous data stream from Starter Arduino     
     def get_data(self)->str:
         try:
             buffer = ''
             buffer = self.arduino_port.read_until(expected=b'\r')
             message = buffer.decode().strip()
         except:
-            message = 'Receive failed'
+            message = 'Receive stream failed'
         return message
 
+    # This is used to reset the Arduinos to a semi-normal state (NOT REBOOT)
     def reset_arduinos(self):
         try:
             for key, port in self.__open_ports__.items():
                 self.arduino_port = port
                 message = self.send_command('ae')
+                self.chk_analogread.deselect()
                 message = self.send_command('lo')
+                self.chk_flicker.deselect()
         except:
-            pass
+            logging.debug(f"Error resetting {key}")
 
+    # Use this to close all the open serial ports
     def close_ports(self):
         try:
             for key, port in self.__open_ports__.items():
                 if port.is_open:
                     port.close()
         except:
-            pass
+            logging.debug(f"Error closing {key}")
 
+    # This is used to display the status of battery/AC power
     def power_status(self):
         # returns a tuple 
         battery = psutil.sensors_battery()
@@ -390,6 +414,11 @@ class tkinterGUI(tk.Tk):
             return f"Plugged in ({battery.percent}% charged)"
         else:
             return f"On battery power ({battery.percent}%) (timeleft={timedelta(seconds=battery.secsleft)})"
+
+    # This is used to send text to the multi-line text box      
+    def output_text(self,textstring:str):
+        self.txt_output_multi.insert(tk.END, f"{textstring}\n")
+        self.txt_output_multi.yview(tk.END)
 
 #endregion
 
@@ -412,14 +441,42 @@ def set_analogread(StartRead:bool):
         # Stop the Arduino from outputting data regularly
         message = my_gui.send_command('ae')
 
-# +++++++++++++++++++++ Read analog data (and re-intialze Timer afterwards) ++++++++++++++++++++++++++++
-def analogread_timer():   
-    analog_data = my_gui.get_data()
-    my_gui.txt_name_multi.insert(tk.END,f"{analog_data}  ({str(my_gui.timer_id)})\n")
-    my_gui.txt_name_multi.yview(tk.END) 
+# This is the time rthat is called every interval period
+def analogread_timer(): 
+    global analogread_notification_sent
+    global pushbutton_notification_sent 
+    # Get the message from teh Arduino starter stream (every interval period) 
+    data_stream = my_gui.get_data()
+    # Parse out the analog read data and Pushbutton state
+    analog_value, pushbutton_state = [_.strip() for _ in data_stream.split(",")]
+    my_gui.output_text(f"analog value={analog_value}, pushbutton state={pushbutton_state}, timer_id={str(my_gui.timer_id)}")
+
+    # Check if pushbutton state is 1, or pressed
+    if (my_gui.rdo_notify_str.get() == 2 and int(pushbutton_state) == 1):
+        if not analogread_notification_sent:
+            subject = f"{my_gui.get_com_port()} pushed its button"
+            send_email_notification(subject)
+            analogread_notification_sent = True
+            my_gui.output_text(f"Notification: {subject}")
+    elif (my_gui.rdo_notify_str.get() == 2 and analogread_notification_sent):
+        analogread_notification_sent = False
+        my_gui.output_text(f"{my_gui.get_com_port()} button released")
+
+    # Check if the analog read value is > 900
+    if (my_gui.rdo_notify_str.get() == 3 and int(analog_value) > 900):
+        if not pushbutton_notification_sent:
+            subject = f"{my_gui.get_com_port()} analog > 900"
+            send_email_notification(subject)
+            pushbutton_notification_sent = True
+            my_gui.output_text(f"Notification: {subject}")
+    elif (my_gui.rdo_notify_str.get() == 3 and pushbutton_notification_sent and int(analog_value) < 100):
+        pushbutton_notification_sent = False
+        my_gui.output_text(f"{my_gui.get_com_port()} analog < 100")
+
     my_gui.timer_id = my_gui.after(800,analogread_timer)
 
-def SendEmailMessage():
+# Send an email notification based on certain events
+def send_email_notification(subject:str):
     config = configparser.ConfigParser(strict=True)
     config.read(Path("starter.ini"))
 
@@ -429,11 +486,13 @@ def SendEmailMessage():
     password = config["SMTPinfo"]["Password"]
     receiver_email = config["SMTPinfo"]["NotifyEmail"]
 
+    logging.debug(f"sender_email={sender_email}, receiver_email={receiver_email}")
+
     if not all([smtp_server, port, sender_email, password, receiver_email]):
          return
 
     message = MIMEMultipart("alternative")
-    message["Subject"] = "Test message"
+    message["Subject"] = subject
     message["From"] = sender_email
     message["To"] = receiver_email
     # Write the plain text part
@@ -480,6 +539,6 @@ if __name__ == "__main__":
     # https://stackoverflow.com/questions/29158220/tkinter-understanding-mainloop
     my_gui.mainloop()
 
-    # logging.shutdown()
+    logging.shutdown()
 
 #endregion
