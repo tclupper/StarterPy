@@ -2,14 +2,14 @@ import sys
 import glob
 from datetime import timedelta
 
-
 import tkinter as tk                                            # Used for the GUI
 from tkinter.constants import N                                 # Used for the GUI
-from tkinter.filedialog import askopenfilename                  # Used for the GUI
+from tkinter.filedialog import asksaveasfilename                # Used for the GUI
 from tkinter import messagebox                                  # Used for the GUI
 
 import serial           # Used to communication to the Arduino (or other serial devices)
 import time             # Used to pause operation for a few seconds (during serial device bootup)
+import datetime         # Used to get a current time stamp
 
 import psutil                       # Used to determine power status in laptops 
 import webbrowser as wb             # Used to spawn a browser
@@ -21,7 +21,7 @@ import configparser                                 # Used in parsing .ini file
 
 from pathlib import Path                            # Used for specifying a generic path
 import logging                                      # Used in logging
-from logging import (                                # Used in logging
+from logging import (                               # Used in logging
     FileHandler,
     Formatter,
     StreamHandler
@@ -32,6 +32,7 @@ from logging import (                                # Used in logging
 smallfont = ('Helvetica','9','normal')
 normalfont = ('Helvetica','10','normal')
 boldfont = ('Helvetica','10','bold')
+# There is probably a better way to track the status of these
 analogread_notification_sent = False         # This is used to determine if the email notification was sent for analog read
 pushbutton_notification_sent = False         # This is used to determine if the email notification was sent pushbutton state
 EOL = '\r'      # Constant end of line character.  This must match with Arduino starter code.
@@ -75,7 +76,7 @@ logging.basicConfig(
 )
 
 #Comment out the below to ENABLE debug output  (uncomment to DISABLE)
-#logging.disable(logging.DEBUG)
+logging.disable(logging.DEBUG)
 
 #endregion
 
@@ -110,7 +111,7 @@ class tkinterGUI(tk.Tk):
         # Create menu items ---------------------------------------------------------------------
         self.file_menu = tk.Menu(self.my_menu,tearoff=False)
         self.my_menu.add_cascade(label="File", menu=self.file_menu)
-        self.file_menu.add_command(label="Save As...", command=self.func_opendialog)
+        self.file_menu.add_command(label="Save As...", command=self.func_saveasdialog)
         self.file_menu.add_separator()
         self.file_menu.add_command(label="Exit", command=self.quit_program)
         # Create a help menu ---------------------------------------------------------------------
@@ -218,8 +219,8 @@ class tkinterGUI(tk.Tk):
 
     # Open up a dialog box and get a filename
     # Note, to get to the filename outside of class: my_gui.filename
-    def func_opendialog(self):
-        self.filename = askopenfilename(
+    def func_saveasdialog(self):
+        self.filename = asksaveasfilename(
             initialdir=(Path(getattr(self,"filename",None)).parent if getattr(self,"filename",None) else Path.home()), 
             title="Select a file", 
             filetypes=(
@@ -228,7 +229,14 @@ class tkinterGUI(tk.Tk):
                 ("csv files","*.csv")
             )
         )
-        self.output_text(f"filename to save data: {self.filename}")
+        self.output_text(f"Data will be logged to: {self.filename}")
+
+        # Setup a logging file that can be called upon throught the program.
+        # logging is better for a "continuous stream of data", whereas a traditional "file open" is better for one-time data dumps.
+        self.log = logging.getLogger(str(id(self)))
+        self.log.addHandler(logging.FileHandler(self.filename))
+        self.log.setLevel(logging.INFO)
+        self.log.propagate=False
 
     # Show the contents of the text box
     # Note, to get to the text box contents outside of class: my_gui.txt_command_str.get()
@@ -252,8 +260,8 @@ class tkinterGUI(tk.Tk):
             self.arduino_port = self.__open_ports__[comport_key]      # THIS IS THE MOST IMPORTANT STEP!!
             self.txt_command["state"] = "normal"
             self.btn_submit["state"] = "normal"
-            self.chk_analogread["state"] = "normal"
             self.chk_flicker["state"] = "normal"
+            self.chk_analogread["state"] = "normal"
         else:
             self.txt_command["state"] = "disable"
             self.btn_submit["state"] = "disable"
@@ -284,6 +292,10 @@ class tkinterGUI(tk.Tk):
             self.output_text(f"Notifcation on Analog read > 900 (reset < 100) value on Arduino")
         else:
             self.output_text(f"Error in radio button selection")
+
+        logging.debug(f"smtp_server={smtp_server}, port={port}")
+        logging.debug(f"sender_email={sender_email}, password={password}")
+        logging.debug(f"receiver_email={receiver_email}")
 
     # Routine to handle closing of the program window via the drop-down menu
     def quit_program(self):
@@ -330,7 +342,7 @@ class tkinterGUI(tk.Tk):
                     bytesize=serial.EIGHTBITS,
                     parity=serial.PARITY_NONE,
                     stopbits=serial.STOPBITS_ONE,
-                    timeout=5)
+                    timeout=5)    # Increase this is you feel you need more time
                 time.sleep(2)     # This is needed to wait for the Arduino to reset
                 ser.flush()
                 ser.write(b'i\r')
@@ -394,6 +406,7 @@ class tkinterGUI(tk.Tk):
                 self.chk_analogread.deselect()
                 message = self.send_command('lo')
                 self.chk_flicker.deselect()
+                message = self.send_command('to')
         except:
             logging.debug(f"Error resetting {key}")
 
@@ -423,7 +436,8 @@ class tkinterGUI(tk.Tk):
 #endregion
 
 #region ~~~~~~~~~~  Miscellaneous functions  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Set the Arduino to flicker LED
+# Here is a function that is called from an event within the gui class, but has the code outside the class
+# In this case, we are setting the Arduino to flicker mode.
 def set_flicker(FlickerOn:bool):
     if FlickerOn:
         message = my_gui.send_command('lf')
@@ -433,9 +447,11 @@ def set_flicker(FlickerOn:bool):
 # Set the Arduino to read data every 1 second
 def set_analogread(StartRead:bool):
     if StartRead:
+        message = my_gui.send_command(f"o{int(read_interval):02d}")
+        logging.debug(f"Starting analog stream: o{int(read_interval):02d}  {message}")
         message = my_gui.send_command('ab')
         # https://www.pythontutorial.net/tkinter/tkinter-after/
-        my_gui.timer_id = my_gui.after(800,analogread_timer)
+        my_gui.timer_id = my_gui.after(timer_interval,analogread_timer)
     else:
         my_gui.cancel_timer()
         # Stop the Arduino from outputting data regularly
@@ -445,11 +461,26 @@ def set_analogread(StartRead:bool):
 def analogread_timer(): 
     global analogread_notification_sent
     global pushbutton_notification_sent 
+    
     # Get the message from teh Arduino starter stream (every interval period) 
     data_stream = my_gui.get_data()
+    
     # Parse out the analog read data and Pushbutton state
     analog_value, pushbutton_state = [_.strip() for _ in data_stream.split(",")]
-    my_gui.output_text(f"analog value={analog_value}, pushbutton state={pushbutton_state}, timer_id={str(my_gui.timer_id)}")
+
+    #  CLear the text box of ot gets to big (> than 1000 lines)
+    num_lines = my_gui.txt_output_multi.get("1.0",tk.END).count('\n')
+    if num_lines > 1000:
+        my_gui.txt_output_multi.delete("1.0",tk.END)
+
+    my_gui.output_text(f"analog value={analog_value}, pushbutton state={pushbutton_state}")
+
+    # log the data to the log data file (if it is open)
+    try:    
+        if my_gui.filename != "":
+             my_gui.log.info(f"{datetime.datetime.now()}, {data_stream}")
+    except:
+        pass
 
     # Check if pushbutton state is 1, or pressed
     if (my_gui.rdo_notify_str.get() == 2 and int(pushbutton_state) == 1):
@@ -473,23 +504,14 @@ def analogread_timer():
         pushbutton_notification_sent = False
         my_gui.output_text(f"{my_gui.get_com_port()} analog < 100")
 
-    my_gui.timer_id = my_gui.after(800,analogread_timer)
+    my_gui.timer_id = my_gui.after(timer_interval,analogread_timer)
 
 # Send an email notification based on certain events
 def send_email_notification(subject:str):
-    config = configparser.ConfigParser(strict=True)
-    config.read(Path("starter.ini"))
-
-    smtp_server = config["SMTPinfo"]["SMTPServer"]
-    port = config.getint("SMTPinfo","SMTPPort")
-    sender_email = config["SMTPinfo"]["SenderEmail"]
-    password = config["SMTPinfo"]["Password"]
-    receiver_email = config["SMTPinfo"]["NotifyEmail"]
-
-    logging.debug(f"sender_email={sender_email}, receiver_email={receiver_email}")
 
     if not all([smtp_server, port, sender_email, password, receiver_email]):
-         return
+        logging.debug("Error sending email")
+        return
 
     message = MIMEMultipart("alternative")
     message["Subject"] = subject
@@ -535,6 +557,26 @@ def send_email_notification(subject:str):
 if __name__ == "__main__":
     # Initialize the tkinter GUI object
     my_gui = tkinterGUI()
+
+    config = configparser.ConfigParser(strict=True)
+    config.read(Path("starter.ini"))
+    smtp_server = config["SMTPinfo"]["SMTPServer"]
+    port = config.getint("SMTPinfo","SMTPPort")
+    sender_email = config["EmailInfo"]["SenderEmail"]
+    password = config["EmailInfo"]["Password"]
+    receiver_email = config["EmailInfo"]["NotifyEmail"]
+    read_interval = config["ProgramInfo"]["ReadInterval"]
+    logging.debug(f"sender_email={sender_email}, receiver_email={receiver_email}")
+
+    # Set the timer_interval to be just shy of the Arduino output interval (within 2 seconds of actaul time)
+    if int(read_interval) > 60:
+        read_interval = "60"
+    elif int(read_interval) < 1:
+        read_interval = "1"
+    timer_interval = int(read_interval)*800
+    if int(read_interval)*1000 - timer_interval > 2000:
+        timer_interval = int(read_interval)*1000 - 2000
+    logging.debug(f"read_interval={int(read_interval):02d} , timer_interval={str(timer_interval)}")
 
     # https://stackoverflow.com/questions/29158220/tkinter-understanding-mainloop
     my_gui.mainloop()
