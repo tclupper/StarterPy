@@ -1,6 +1,6 @@
 # Starter project: Python source code for a desktop application to interface with the [Arduino Uno microcontroller](https://github.com/tclupper/StarterUno).
 
-### Rev 2/22/2021
+### Rev 2/24/2021
 ### License: [Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0)
 
 ---
@@ -29,9 +29,11 @@ The Python application uses tkinter to create a window with a basic set of user 
 * radio buttons
 * drop-down list box
 * multi-line text box (used for input and output)
-* menus with Open file and about boxes
+* menus with File and about boxes
 
-It also includes the necessary code to communicate with the virtual serial port to the Arduino board using the "language" within the firmware.  The idea is that you would use this code as a starting point to develop your application.  The setup also allows you to compile the code to create a stand alone executable .exe file.
+It includes the necessary code to communicate with the Arduino Uno via the virtual com-port using the "commands" within the firmware.  You can even attached multiple Arduino Unos to the computer's USB ports and the program will allow you to select the one to interface to.  When you start the program, it automatically loads the available Unos into a drop-down box for you to select. 
+
+The idea is that you would use this code as a starting point to develop your application.  The Python setup also allows you to compile the code to create a stand alone executable .exe file (for Windows...I have not tried Linux yet).
 
 ---
 
