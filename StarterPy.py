@@ -76,7 +76,7 @@ logging.basicConfig(
 )
 
 #Comment out the below to ENABLE debug output  (uncomment to DISABLE)
-#logging.disable(logging.DEBUG)
+logging.disable(logging.DEBUG)
 
 #endregion
 
@@ -562,7 +562,7 @@ if __name__ == "__main__":
     my_gui = tkinterGUI()
 
     config = configparser.ConfigParser(strict=True)
-    config.read(Path("example.ini"))
+    config.read(Path("starter.ini"))
     smtp_server = config["SMTPinfo"]["SMTPServer"]
     port = config.getint("SMTPinfo","SMTPPort")
     sender_email = config["EmailInfo"]["SenderEmail"]
