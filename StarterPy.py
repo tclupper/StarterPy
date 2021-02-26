@@ -76,7 +76,7 @@ logging.basicConfig(
 )
 
 #Comment out the below to ENABLE debug output  (uncomment to DISABLE)
-logging.disable(logging.DEBUG)
+#logging.disable(logging.DEBUG)
 
 #endregion
 
@@ -205,7 +205,7 @@ class tkinterGUI(tk.Tk):
         Program name: Starter Application
         Author: Bugs Bunny
         Revision: 0.01
-        Date: 2/24/2021
+        Date: 2/26/2021
         
         NOTE: This software is for fun purposes only
         """.strip()
@@ -224,7 +224,7 @@ class tkinterGUI(tk.Tk):
             initialdir=(Path(getattr(self,"filename",None)).parent if getattr(self,"filename",None) else Path.home()), 
             title="Select a file", 
             filetypes=(
-                ("all files", "*.*"),
+                # ("all files", "*.*"),
                 ("text files","*.txt"),
                 ("csv files","*.csv")
             )
@@ -257,7 +257,7 @@ class tkinterGUI(tk.Tk):
         logging.debug(f"key={comport_key}")
 
         if comport_key in self.__open_ports__.keys():
-            self.arduino_port = self.__open_ports__[comport_key]      # THIS IS THE MOST IMPORTANT STEP!!
+            self.manuf, self.model, self.sernum, self.firmware, self.arduino_port = self.__open_ports__[comport_key]
             self.txt_command["state"] = "normal"
             self.btn_submit["state"] = "normal"
             self.chk_flicker["state"] = "normal"
@@ -352,7 +352,7 @@ class tkinterGUI(tk.Tk):
                     manuf, model, sernum, firmware = [_.strip() for _ in device_info]
                     device_entry = f"{port}  ({', '.join((manuf, model, sernum, firmware))})"
                     self.arduino_list.append(device_entry)
-                    self.__open_ports__[port] = ser
+                    self.__open_ports__[port] = [manuf, model, sernum, firmware, ser]
             except (OSError, serial.SerialException):
                 pass
         if len(self.arduino_list) == 1:
@@ -364,13 +364,6 @@ class tkinterGUI(tk.Tk):
              return data[:5].strip()
          else:
              return ""
-
-    def cancel_timer(self):
-         # If the Timer is running, stop it.
-         try:
-             self.after_cancel(self.timer_id)        
-         except:
-             logging.debug(f"Cancel {self.timer_id} failed")
 
     # Send the command and output the result
     def send_command(self, command:str)->str:
@@ -393,20 +386,30 @@ class tkinterGUI(tk.Tk):
             buffer = ''
             buffer = self.arduino_port.read_until(expected=b'\r')
             message = buffer.decode().strip()
+            self.arduino_port.flush()
         except:
             message = 'Receive stream failed'
         return message
 
+    def cancel_timer(self):
+         # If the Timer is running, stop it.
+         try:
+             self.after_cancel(self.timer_id)        
+         except:
+             logging.debug(f"Cancel {self.timer_id} failed")
+
     # This is used to reset the Arduinos to a semi-normal state (NOT REBOOT)
     def reset_arduinos(self):
+
         try:
-            for key, port in self.__open_ports__.items():
+            for key, values in self.__open_ports__.items():
+                man, mod, ser, firm, port = values
                 self.arduino_port = port
-                message = self.send_command('ae')
+                message = self.send_command('r')
                 self.chk_analogread.deselect()
-                message = self.send_command('lo')
+                message = self.send_command('mo')
                 self.chk_flicker.deselect()
-                message = self.send_command('to')
+                message = self.send_command('lo')
         except:
             logging.debug(f"Error resetting {key}")
 
@@ -440,22 +443,22 @@ class tkinterGUI(tk.Tk):
 # In this case, we are setting the Arduino to flicker mode.
 def set_flicker(FlickerOn:bool):
     if FlickerOn:
-        message = my_gui.send_command('lf')
+        message = my_gui.send_command('mf')
     else:
-        message = my_gui.send_command('lo')
+        message = my_gui.send_command('mo')
 
 # Set the Arduino to read data every 1 second
 def set_analogread(StartRead:bool):
     if StartRead:
         message = my_gui.send_command(f"o{int(read_interval):02d}")
         logging.debug(f"Starting analog stream: o{int(read_interval):02d}  {message}")
-        message = my_gui.send_command('ab')
+        message = my_gui.send_command('rb')
         # https://www.pythontutorial.net/tkinter/tkinter-after/
         my_gui.timer_id = my_gui.after(timer_interval,analogread_timer)
     else:
         my_gui.cancel_timer()
         # Stop the Arduino from outputting data regularly
-        message = my_gui.send_command('ae')
+        message = my_gui.send_command('r')
 
 # This is the time rthat is called every interval period
 def analogread_timer(): 
@@ -478,7 +481,7 @@ def analogread_timer():
     # log the data to the log data file (if it is open)
     try:    
         if my_gui.filename != "":
-             my_gui.log.info(f"{datetime.datetime.now()}, {data_stream}")
+             my_gui.log.info(f"{datetime.datetime.now()}, {my_gui.sernum}, {data_stream}")
     except:
         pass
 
@@ -559,7 +562,7 @@ if __name__ == "__main__":
     my_gui = tkinterGUI()
 
     config = configparser.ConfigParser(strict=True)
-    config.read(Path("starter.ini"))
+    config.read(Path("example.ini"))
     smtp_server = config["SMTPinfo"]["SMTPServer"]
     port = config.getint("SMTPinfo","SMTPPort")
     sender_email = config["EmailInfo"]["SenderEmail"]

@@ -1,6 +1,6 @@
 # Starter project: Python source code for a desktop application to interface with the [Arduino Uno microcontroller](https://github.com/tclupper/StarterUno).
 
-### Rev 2/25/2021
+### Rev 2/26/2021
 ### License: [Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0)
 
 ---
