@@ -1,6 +1,6 @@
 # Starter project: Python source code for a desktop application to interface with the [Arduino Uno microcontroller](https://github.com/tclupper/StarterUno).
 
-### Rev 2/26/2021
+### Rev 3/2/2021
 ### License: [Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0)
 
 ---
@@ -33,7 +33,7 @@ The Python application uses tkinter to create a window with a basic set of user 
 
 It includes the necessary code to communicate with the Arduino Uno via the virtual com-port using the "commands" within the firmware.  You can even attached multiple Arduino Unos to the computer's USB ports and the program will allow you to select the one to communicated with.  When you start the program, it automatically loads the available Unos into a drop-down box for you to select.
 
-The basic operation allows you to send commands to the Uno to control things like LEDs and get status of pushbuttons.  The main feature allows you to automatically read the analog port(s) of the Uno at regular intervals.  You specifiy the interval (in seconds) and the email notification information in the "starter.ini" file.  You check the box to start the streaming of the Arduino data.  If you specify a log file, it will log the data to the file as well as showing it on the screen.  Simply uncheck the box to stop.  Using an Arduino as a data-logger is an important and typical use case.  
+The basic operation allows you to send commands to the Uno to control things like LEDs and get status of pushbuttons.  The main feature allows you to automatically read the analog port(s) of the Uno at regular intervals.  You specify the interval (in seconds) and the email notification information in the "starter.ini" file.  You check the box to start the streaming of the Arduino data.  If you specify a log file, it will log the data to the file as well as showing it on the screen.  Simply uncheck the box to stop.  Using an Arduino as a data-logger is an important and typical use case.  
 
 In general, the idea is that you would use this code as a starting point to develop your own application.  The Python setup also allows you to compile the code to create a stand alone executable .exe file (for Windows...I have not tried Linux yet).
 

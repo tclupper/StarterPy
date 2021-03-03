@@ -100,10 +100,10 @@ class tkinterGUI(tk.Tk):
         except:
             pass        # If the icon file is not there
 
-        self.arduino_list = []      # A list of possible arduinos (used only in tkinterGUI class)
+        self.arduino_list = []      # A list of possible Arduinos (used only in tkinterGUI class)
         self.timer_id = ''          # Not needed here, just a reminder this is a local variable 
 
-        self.protocol("WM_DELETE_WINDOW", self.quit_program)    # Needed to provide a good exit stratagy
+        self.protocol("WM_DELETE_WINDOW", self.quit_program)    # Needed to provide a good exit strategy
 
         # ================== Add a menu ======================================================================
         self.my_menu = tk.Menu(self)
@@ -151,7 +151,7 @@ class tkinterGUI(tk.Tk):
          # ======================= add a label to describe power status
         self.lbl_powerstatus = tk.Label(self, text=self.power_status(), fg='green', font=boldfont)
         self.lbl_powerstatus.grid(row=1, column=0, pady=7, sticky=tk.NW)   
-        # ======================= add check box to enable repeatative reading of the Arduino analog input
+        # ======================= add check box to enable repetitive reading of the Arduino analog input
         self.chk_analogread_str = tk.IntVar()
         self.chk_analogread = tk.Checkbutton(self, text="Analog read mode", variable=self.chk_analogread_str, onvalue=1, offvalue=0,command=self.func_chk_analogread,font=normalfont)
         self.chk_analogread.config(width=17)       
@@ -205,7 +205,7 @@ class tkinterGUI(tk.Tk):
         Program name: Starter Application
         Author: Bugs Bunny
         Revision: 0.01
-        Date: 2/26/2021
+        Date: 3/2/2021
         
         NOTE: This software is for fun purposes only
         """.strip()
@@ -231,7 +231,7 @@ class tkinterGUI(tk.Tk):
         )
         self.output_text(f"Data will be logged to: {self.filename}")
 
-        # Setup a logging file that can be called upon throught the program.
+        # Setup a logging file that can be called upon throughout the program.
         # logging is better for a "continuous stream of data", whereas a traditional "file open" is better for one-time data dumps.
         self.log = logging.getLogger(str(id(self)))
         self.log.addHandler(logging.FileHandler(self.filename))
@@ -287,9 +287,9 @@ class tkinterGUI(tk.Tk):
         if self.rdo_notify_str.get() == 1:
             self.output_text(f"No notification selected")
         elif self.rdo_notify_str.get() == 2:
-            self.output_text(f"Notifcation on pushbutton state on Arduino")
+            self.output_text(f"Notification on pushbutton state on Arduino")
         elif self.rdo_notify_str.get() == 3:
-            self.output_text(f"Notifcation on Analog read > 900 (reset < 100) value on Arduino")
+            self.output_text(f"Notification on Analog read > 900 (reset < 100) value on Arduino")
         else:
             self.output_text(f"Error in radio button selection")
 
@@ -452,6 +452,7 @@ def set_analogread(StartRead:bool):
     if StartRead:
         message = my_gui.send_command(f"o{int(read_interval):02d}")
         logging.debug(f"Starting analog stream: o{int(read_interval):02d}  {message}")
+        message = my_gui.send_command('rf0')
         message = my_gui.send_command('rb')
         # https://www.pythontutorial.net/tkinter/tkinter-after/
         my_gui.timer_id = my_gui.after(timer_interval,analogread_timer)
@@ -571,7 +572,7 @@ if __name__ == "__main__":
     read_interval = config["ProgramInfo"]["ReadInterval"]
     logging.debug(f"sender_email={sender_email}, receiver_email={receiver_email}")
 
-    # Set the timer_interval to be just shy of the Arduino output interval (within 2 seconds of actaul time)
+    # Set the timer_interval to be just shy of the Arduino output interval (within 2 seconds of actual time)
     if int(read_interval) > 60:
         read_interval = "60"
     elif int(read_interval) < 1:
