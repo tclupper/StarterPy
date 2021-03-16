@@ -14,7 +14,7 @@ pyinstaller
 
 #
 # Finally, to create a stand alone .exe file, run the following:
-# (starter) C:\StarterProject\StarterPy>pyinstaller --onefile --windowed --icon .\images\StarterPy.ico --clean --noconfirm .\StarterPy.py
+# (starter) C:\StarterProject\StarterPy>pyinstaller --onefile --windowed --icon .\starter.ico --clean --noconfirm .\StarterPy.py
 #          <<<< OR >>>>
-# (starter) C:\StarterProject\StarterPy>pyinstaller -F -w -i .\images\StarterPy.ico --clean -y .\StarterPy.py
+# (starter) C:\StarterProject\StarterPy>pyinstaller -F -w -i .\starter.ico --clean -y .\StarterPy.py
 

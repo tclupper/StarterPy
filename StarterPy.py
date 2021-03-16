@@ -1,3 +1,4 @@
+#region ~~~~~~~~~~  Global declarations ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 import sys
 import glob
 from datetime import timedelta
@@ -25,10 +26,9 @@ from logging import (                               # Used in logging
     FileHandler,
     Formatter,
     StreamHandler
-)       
+)
 
-#region ~~~~~~~~~~  Global variables  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Looking for a better way to do this ...
+# There is probably a better way to set fonts
 smallfont = ('Helvetica','9','normal')
 normalfont = ('Helvetica','10','normal')
 boldfont = ('Helvetica','10','bold')
@@ -36,6 +36,9 @@ boldfont = ('Helvetica','10','bold')
 analogread_notification_sent = False         # This is used to determine if the email notification was sent for analog read
 pushbutton_notification_sent = False         # This is used to determine if the email notification was sent pushbutton state
 EOL = '\r'      # Constant end of line character.  This must match with Arduino starter code.
+timer_interval = 1000
+output_interval = 1
+
 #endregion
 
 #region ~~~~~~~~~~  Code to including error report via logging ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -96,7 +99,7 @@ class tkinterGUI(tk.Tk):
         # You can then convert them to an .ico image here (retain 32px by 32px size): https://icoconvert.com/
         # Put the path for the .ico file below
         try:
-            self.iconbitmap(Path("./images/StarterPy.ico"))
+            self.iconbitmap(Path("./starter.ico"))
         except:
             pass        # If the icon file is not there
 
@@ -127,11 +130,11 @@ class tkinterGUI(tk.Tk):
         # Row = 0 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         # ======================= add a drop down combo box of availabel Arduino serial ports
         self.scan_serial_ports()
-        self.opt_serial_str = tk.StringVar()      
-        self.opt_serial_str.set(self.arduino_list[0])
-        self.opt_serial = tk.OptionMenu(self, self.opt_serial_str, *self.arduino_list, command=self.func_opt_serial)
-        self.opt_serial.grid(row=0, column=0, padx=5, pady=2, sticky=tk.NW)
-        self.opt_serial.config(font=normalfont)
+        self.cbo_comport_str = tk.StringVar()      
+        self.cbo_comport_str.set(self.arduino_list[0])
+        self.cbo_comport = tk.OptionMenu(self, self.cbo_comport_str, *self.arduino_list, command=self.func_cbo_comport)
+        self.cbo_comport.grid(row=0, column=0, padx=5, pady=2, sticky=tk.NW)
+        self.cbo_comport.config(font=normalfont)
         # ======================= add a label and text box to enter commands for the Arduino
         self.lbl_command = tk.Label(self, text='Enter command here', font=normalfont)
         self.lbl_command.config(width=19)
@@ -143,9 +146,9 @@ class tkinterGUI(tk.Tk):
         self.txt_command.bind("<Return>",self.func_txt_command)
         self.txt_command["state"] = "disable"
         # ======================= add a command submit button
-        self.btn_submit = tk.Button(self, text="Submit command", command=self.func_btn_submit,font=normalfont)
-        self.btn_submit.grid(row=0, column=3, padx=5, pady=5, sticky=tk.NW)
-        self.btn_submit["state"] = "disable"
+        self.btn_send_command = tk.Button(self, text="Submit command", command=self.func_btn_send_command,font=normalfont)
+        self.btn_send_command.grid(row=0, column=3, padx=5, pady=5, sticky=tk.NW)
+        self.btn_send_command["state"] = "disable"
 
         # Row = 1 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
          # ======================= add a label to describe power status
@@ -224,9 +227,9 @@ class tkinterGUI(tk.Tk):
             initialdir=(Path(getattr(self,"filename",None)).parent if getattr(self,"filename",None) else Path.home()), 
             title="Select a file", 
             filetypes=(
-                # ("all files", "*.*"),
+                ("csv files","*.csv"),
                 ("text files","*.txt"),
-                ("csv files","*.csv")
+                ("all files", "*.*")
             )
         )
         self.output_text(f"Data will be logged to: {self.filename}")
@@ -244,12 +247,12 @@ class tkinterGUI(tk.Tk):
         pass
 
     # execute this code when you click the button.  It calls the matplotlib graph function
-    def func_btn_submit(self):
+    def func_btn_send_command(self):
         message = self.send_command(self.txt_command_str.get().strip())
         self.output_text(f"command: {self.txt_command_str.get().strip()}, output: {message}")
 
     # display the select value from the drop down list box
-    def func_opt_serial(self,event):
+    def func_cbo_comport(self,event):
         self.cancel_timer()      # Just in case one is running (i.e. you switch Ardunios mid-stream...)
         self.reset_arduinos()    # Just in case, stop all Arduinos from outputting analog data stream
         comport_key = self.get_com_port().strip()
@@ -259,12 +262,12 @@ class tkinterGUI(tk.Tk):
         if comport_key in self.__open_ports__.keys():
             self.manuf, self.model, self.sernum, self.firmware, self.arduino_port = self.__open_ports__[comport_key]
             self.txt_command["state"] = "normal"
-            self.btn_submit["state"] = "normal"
+            self.btn_send_command["state"] = "normal"
             self.chk_flicker["state"] = "normal"
             self.chk_analogread["state"] = "normal"
         else:
             self.txt_command["state"] = "disable"
-            self.btn_submit["state"] = "disable"
+            self.btn_send_command["state"] = "disable"
             self.chk_analogread["state"] = "disable"
             self.chk_flicker["state"] = "disable"
 
@@ -293,7 +296,7 @@ class tkinterGUI(tk.Tk):
         else:
             self.output_text(f"Error in radio button selection")
 
-        logging.debug(f"smtp_server={smtp_server}, port={port}")
+        logging.debug(f"smtp_server={smtp_server}, port={smtp_port}")
         logging.debug(f"sender_email={sender_email}, password={password}")
         logging.debug(f"receiver_email={receiver_email}")
 
@@ -306,11 +309,11 @@ class tkinterGUI(tk.Tk):
              self.destroy()
 
     def scan_serial_ports(self):
-        """ Lists serial port names
+        """ Scans all com ports and creates a list of ports with Arduni Unos connected to them
             :raises EnvironmentError:
                 On unsupported or unknown platforms
             :returns:
-                A list of the serial ports available on the system
+                Populated list variable __open-ports__ with available Arduino Unos (and keeps ports open)
         """
         self.arduino_list.append("Select Arduino to use")        # This adds a default entry to the list
         # https://stackoverflow.com/questions/12090503/listing-available-com-ports-with-python
@@ -324,8 +327,9 @@ class tkinterGUI(tk.Tk):
         else:
             raise EnvironmentError('Unsupported platform')
 
-        # Make a list and open availbale Arduino serial ports (and LEAVE THEM OPEN).
-        # NOTE: The code below outlines the fact that the Arduino resets with DTR signal by design.
+        # Make a list and open available Arduino serial ports (and LEAVE THEM OPEN).
+        #   (NOTE: This is because the Arduino is reset every time you open the port by the DTR signal line)
+        #   (      This has to do with the auto-programming capability of the Arduino)
         # https://forum.arduino.cc/index.php?topic=96422.0
         # https://electronics.stackexchange.com/questions/24743/arduino-resetting-while-reconnecting-the-serial-terminal
         # https://electronics.stackexchange.com/questions/49373/how-to-keep-the-arduino-uno-up-on-serial-connections
@@ -359,15 +363,15 @@ class tkinterGUI(tk.Tk):
             self.arduino_list[0] = "No Arduino devices found"
 
     def get_com_port(self):
-         data = self.opt_serial_str.get()
+         data = self.cbo_comport_str.get()
          if "COM" in data:
              return data[:5].strip()
          else:
              return ""
 
     # Send the command and output the result
-    def send_command(self, command:str)->str:
-        if self.arduino_port.is_open:
+    def send_command(self, command:str)->str:     # NOTE: We assume the comport is always left open
+        if self.arduino_port.is_open:             #      (This was done because the Arduino is reset every time you open the port)
             try:
                 self.arduino_port.flush()
                 self.arduino_port.write(f"{command}{EOL}".encode())
@@ -449,9 +453,17 @@ def set_flicker(FlickerOn:bool):
 
 # Set the Arduino to read data every 1 second
 def set_analogread(StartRead:bool):
+    global timer_interval
+    global output_interval
     if StartRead:
-        message = my_gui.send_command(f"o{int(read_interval):02d}")
-        logging.debug(f"Starting analog stream: o{int(read_interval):02d}  {message}")
+        output_interval = int(my_gui.send_command("o?"))
+        # Set the timer_interval to be just shy of the Arduino output interval (within 2 seconds of actual time)
+        if output_interval < 10:
+            timer_interval = output_interval*800
+        else:
+            timer_interval = 1000*(output_interval - 2)
+        my_gui.output_text(f"output_interval={int(output_interval):02d} , timer_interval={str(timer_interval)}")
+        logging.debug(f"output_interval={int(output_interval):02d} , timer_interval={str(timer_interval)}")
         message = my_gui.send_command('rf0')
         message = my_gui.send_command('rb')
         # https://www.pythontutorial.net/tkinter/tkinter-after/
@@ -461,20 +473,21 @@ def set_analogread(StartRead:bool):
         # Stop the Arduino from outputting data regularly
         message = my_gui.send_command('r')
 
-# This is the time rthat is called every interval period
+# This is the timer that is called every interval period
 def analogread_timer(): 
     global analogread_notification_sent
     global pushbutton_notification_sent 
+    global timer_interval
     
     # Get the message from teh Arduino starter stream (every interval period) 
     data_stream = my_gui.get_data()
     
     # Parse out the analog read data and Pushbutton state
-    analog_value, pushbutton_state = [_.strip() for _ in data_stream.split(",")]
+    pushbutton_state, analog_value = [_.strip() for _ in data_stream.split(",")]
 
     #  CLear the text box of ot gets to big (> than 1000 lines)
     num_lines = my_gui.txt_output_multi.get("1.0",tk.END).count('\n')
-    if num_lines > 1000:
+    if num_lines > 5000:
         my_gui.txt_output_multi.delete("1.0",tk.END)
 
     my_gui.output_text(f"analog value={analog_value}, pushbutton state={pushbutton_state}")
@@ -487,33 +500,33 @@ def analogread_timer():
         pass
 
     # Check if pushbutton state is 1, or pressed
-    if (my_gui.rdo_notify_str.get() == 2 and int(pushbutton_state) == 1):
-        if not analogread_notification_sent:
-            subject = f"{my_gui.get_com_port()} pushed its button"
-            send_email_notification(subject)
-            analogread_notification_sent = True
-            my_gui.output_text(f"Notification: {subject}")
-    elif (my_gui.rdo_notify_str.get() == 2 and analogread_notification_sent):
-        analogread_notification_sent = False
+    if (my_gui.rdo_notify_str.get() == 2 and int(pushbutton_state) == 1 and not pushbutton_notification_sent):
+        subject = f"{my_gui.get_com_port()} pushed its button"
+        target_message = "This is the target message"
+        send_email_notification(subject,target_message)
+        pushbutton_notification_sent = True
+        my_gui.output_text(f"Notification: {subject}")
+    if (my_gui.rdo_notify_str.get() == 2 and int(pushbutton_state) == 0 and pushbutton_notification_sent):
+        pushbutton_notification_sent = False
         my_gui.output_text(f"{my_gui.get_com_port()} button released")
 
     # Check if the analog read value is > 900
-    if (my_gui.rdo_notify_str.get() == 3 and int(analog_value) > 900):
-        if not pushbutton_notification_sent:
-            subject = f"{my_gui.get_com_port()} analog > 900"
-            send_email_notification(subject)
-            pushbutton_notification_sent = True
-            my_gui.output_text(f"Notification: {subject}")
-    elif (my_gui.rdo_notify_str.get() == 3 and pushbutton_notification_sent and int(analog_value) < 100):
-        pushbutton_notification_sent = False
+    if (my_gui.rdo_notify_str.get() == 3 and int(analog_value) > 900 and not analogread_notification_sent):
+        subject = f"{my_gui.get_com_port()} analog > 900"
+        target_message = "This is the target message"
+        send_email_notification(subject,target_message)
+        analogread_notification_sent = True
+        my_gui.output_text(f"Notification: {subject}")
+    if (my_gui.rdo_notify_str.get() == 3 and int(analog_value) < 100 and analogread_notification_sent):
+        analogread_notification_sent = False
         my_gui.output_text(f"{my_gui.get_com_port()} analog < 100")
 
     my_gui.timer_id = my_gui.after(timer_interval,analogread_timer)
 
 # Send an email notification based on certain events
-def send_email_notification(subject:str):
+def send_email_notification(subject:str, target_message:str):
 
-    if not all([smtp_server, port, sender_email, password, receiver_email]):
+    if not all([smtp_server, smtp_port, sender_email, password, receiver_email]):
         logging.debug("Error sending email")
         return
 
@@ -522,7 +535,8 @@ def send_email_notification(subject:str):
     message["From"] = sender_email
     message["To"] = receiver_email
     # Write the plain text part
-    text = """This is plain text.  Let's see how it looks"""
+    #text = """This is plain text.  Let's see how it looks"""
+    text = target_message
     # write the HTML part
     html = """\
         <html>
@@ -543,7 +557,7 @@ def send_email_notification(subject:str):
 
     # Try to log in to server and send email
     try:
-        server = smtplib.SMTP(smtp_server,port)
+        server = smtplib.SMTP(smtp_server,smtp_port)
         server.ehlo() # Can be omitted
         server.starttls(context=context) # Secure the connection
         server.ehlo() # Can be omitted
@@ -557,7 +571,7 @@ def send_email_notification(subject:str):
 
 #endregion
 
-#region ~~~~~~~~~~  Actual main code starts here  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#region ~~~~~~~~~~  Main code starts here  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 if __name__ == "__main__":
     # Initialize the tkinter GUI object
     my_gui = tkinterGUI()
@@ -565,22 +579,12 @@ if __name__ == "__main__":
     config = configparser.ConfigParser(strict=True)
     config.read(Path("starter.ini"))
     smtp_server = config["SMTPinfo"]["SMTPServer"]
-    port = config.getint("SMTPinfo","SMTPPort")
+    smtp_port = config.getint("SMTPinfo","SMTPPort")
     sender_email = config["EmailInfo"]["SenderEmail"]
     password = config["EmailInfo"]["Password"]
     receiver_email = config["EmailInfo"]["NotifyEmail"]
-    read_interval = config["ProgramInfo"]["ReadInterval"]
     logging.debug(f"sender_email={sender_email}, receiver_email={receiver_email}")
 
-    # Set the timer_interval to be just shy of the Arduino output interval (within 2 seconds of actual time)
-    if int(read_interval) > 60:
-        read_interval = "60"
-    elif int(read_interval) < 1:
-        read_interval = "1"
-    timer_interval = int(read_interval)*800
-    if int(read_interval)*1000 - timer_interval > 2000:
-        timer_interval = int(read_interval)*1000 - 2000
-    logging.debug(f"read_interval={int(read_interval):02d} , timer_interval={str(timer_interval)}")
 
     # https://stackoverflow.com/questions/29158220/tkinter-understanding-mainloop
     my_gui.mainloop()

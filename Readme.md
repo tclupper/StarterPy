@@ -1,6 +1,6 @@
 # Starter project: Python source code for a desktop application to interface with the [Arduino Uno microcontroller](https://github.com/tclupper/StarterUno).
 
-### Rev 3/4/2021
+### Rev 3/16/2021
 ### License: [Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0)
 
 ---
@@ -62,8 +62,9 @@ The source code was developed using VScode. It is assumed you know how to use th
 ```
 5) Finally, to create a stand alone .exe file, run the following
 ```
-(starter) C:\StarterProject\StarterPy>pyinstaller --onefile --windowed --icon .\images\StarterPy.ico --clean --noconfirm .\StarterPy.py
+(starter) C:\StarterProject\StarterPy>pyinstaller --onefile --windowed --icon .\starter.ico --clean --noconfirm .\StarterPy.py
 ```
+You will need to copy the __`StarterPy.exe`__ file out of the "dist" directory along with the __`starter.ico`__ and __`starter.ini`__ files over to a directory on the computer you want to run it on.
 
 ---
 ## Notes:
