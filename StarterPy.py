@@ -429,11 +429,15 @@ class tkinterGUI(tk.Tk):
     # This is used to display the status of battery/AC power
     def power_status(self):
         # returns a tuple 
+        # 7/12/2023: Added "if battery:" statement because desktop computers won;t return any battery info at all.
         battery = psutil.sensors_battery()
-        if battery.power_plugged:
-            return f"Plugged in ({battery.percent}% charged)"
+        if battery:
+            if battery.power_plugged:
+                return f"Plugged in ({battery.percent}% charged)"
+            else:
+                return f"On battery power ({battery.percent}%) (timeleft={timedelta(seconds=battery.secsleft)})"
         else:
-            return f"On battery power ({battery.percent}%) (timeleft={timedelta(seconds=battery.secsleft)})"
+            return f"Battery info not available"
 
     # This is used to send text to the multi-line text box      
     def output_text(self,textstring:str):
